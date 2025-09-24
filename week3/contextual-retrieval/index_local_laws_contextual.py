@@ -70,8 +70,8 @@ class ContextualLegalIndexer:
             "categories_processed": set()
         }
         
-        # Document store for tracking
-        self.doc_store_path = Path("contextual_document_store.json")
+        # Document store for tracking (must match tools.py expectation)
+        self.doc_store_path = Path("document_store.json")
         
         logger.info(f"Initialized contextual indexer for local laws in {laws_dir}")
         logger.info(f"Pipeline URL: {pipeline_url}")
@@ -184,8 +184,9 @@ class ContextualLegalIndexer:
         logger.debug(f"Generated document ID: {doc_info['name']} -> {doc_id}")
         return doc_id
     
-    def process_document(self, doc_info: Dict[str, Any], content: str) -> List[ContextualChunk]:
-        """Process a document using contextual chunking"""
+    def process_document(self, doc_info: Dict[str, Any], content: str, 
+                        index_immediately: bool = True) -> List[ContextualChunk]:
+        """Process a document using contextual chunking with optional immediate indexing"""
         # Generate semantically meaningful document ID
         doc_id = self.generate_document_id(doc_info)
         
@@ -197,18 +198,38 @@ class ContextualLegalIndexer:
             "language": "zh-CN"
         }
         
-        # Use the contextual chunker
+        # Create callback for immediate indexing if enabled
+        indexed_chunks = []
+        
+        def on_chunk_ready(chunk: ContextualChunk):
+            """Callback to index chunk immediately when ready"""
+            # Update metadata
+            chunk.metadata["category"] = doc_info["category"]
+            chunk.metadata["doc_title"] = doc_info["name"]
+            
+            if index_immediately:
+                # Index the chunk immediately
+                success = self.index_chunk(chunk)
+                if success:
+                    logger.info(f"  → Indexed chunk {chunk.chunk_index + 1} immediately")
+                    indexed_chunks.append(chunk)
+                else:
+                    logger.warning(f"  → Failed to index chunk {chunk.chunk_index + 1}")
+        
+        # Use the contextual chunker with callback
         logger.info(f"Chunking {doc_info['name']} with contextual enhancement...")
         chunks = self.chunker.chunk_document(
             text=content,
             doc_id=doc_id,
-            doc_metadata=doc_metadata
+            doc_metadata=doc_metadata,
+            on_chunk_ready=on_chunk_ready if index_immediately else None
         )
         
-        # Update chunk metadata with category info
-        for chunk in chunks:
-            chunk.metadata["category"] = doc_info["category"]
-            chunk.metadata["doc_title"] = doc_info["name"]
+        # If not indexing immediately, update metadata for all chunks
+        if not index_immediately:
+            for chunk in chunks:
+                chunk.metadata["category"] = doc_info["category"]
+                chunk.metadata["doc_title"] = doc_info["name"]
         
         return chunks
     
@@ -241,6 +262,10 @@ class ContextualLegalIndexer:
                 self.stats["chunks_indexed"] += 1
                 if chunk.context:
                     self.stats["contextual_chunks"] += 1
+                
+                # IMPORTANT: Save to document store immediately after successful indexing
+                self.save_chunk_to_document_store(chunk)
+                
                 return True
             else:
                 logger.warning(f"Failed to index chunk {chunk.chunk_id}: {response.status_code}")
@@ -251,8 +276,41 @@ class ContextualLegalIndexer:
             self.stats["errors"] += 1
             return False
     
+    def save_chunk_to_document_store(self, chunk: ContextualChunk):
+        """Save individual chunk to document store immediately (compatible with tools.py)"""
+        try:
+            # Load existing store or create new
+            if self.doc_store_path.exists():
+                with open(self.doc_store_path, 'r', encoding='utf-8') as f:
+                    doc_store = json.load(f)
+            else:
+                doc_store = {}
+            
+            # Save chunk in format expected by tools.py get_document method
+            doc_store[chunk.chunk_id] = {
+                "doc_id": chunk.chunk_id,
+                "content": chunk.contextualized_text if self.use_contextual else chunk.text,
+                "metadata": {
+                    **chunk.metadata,
+                    "original_text": chunk.text,
+                    "context": chunk.context,
+                    "chunk_index": chunk.chunk_index,
+                    "char_count": chunk.char_count,
+                    "contextual": self.use_contextual
+                }
+            }
+            
+            # Write immediately - this is critical per user requirement
+            with open(self.doc_store_path, 'w', encoding='utf-8') as f:
+                json.dump(doc_store, f, ensure_ascii=False, indent=2)
+            
+            logger.debug(f"Saved chunk {chunk.chunk_id} to document store")
+            
+        except Exception as e:
+            logger.error(f"Error saving chunk {chunk.chunk_id} to document store: {e}")
+    
     def save_document_info(self, doc_info: Dict[str, Any], chunks: List[ContextualChunk]):
-        """Save document information to local store"""
+        """Save document summary information to local store"""
         # Load existing store or create new
         if self.doc_store_path.exists():
             with open(self.doc_store_path, 'r', encoding='utf-8') as f:
@@ -267,16 +325,23 @@ class ContextualLegalIndexer:
         total_context_tokens = sum(c.context_tokens for c in chunks)
         avg_context_tokens = total_context_tokens / len(chunks) if chunks else 0
         
+        # Store document-level summary (compatible with tools.py format)
         doc_store[doc_id] = {
-            "title": doc_info["name"],
-            "category": doc_info["category"],
-            "file": str(doc_info["path"]),
-            "chunks": len(chunks),
-            "contextual_chunks": sum(1 for c in chunks if c.context),
-            "total_chars": sum(c.char_count for c in chunks),
-            "total_context_tokens": total_context_tokens,
-            "avg_context_tokens": avg_context_tokens,
-            "indexed_at": time.strftime("%Y-%m-%d %H:%M:%S")
+            "doc_id": doc_id,
+            "content": f"Document: {doc_info['name']}\nCategory: {doc_info['category']}\n\nThis is a summary entry for the complete document. Individual chunks are stored separately.",
+            "metadata": {
+                "title": doc_info["name"],
+                "category": doc_info["category"],
+                "file": str(doc_info["path"]),
+                "chunks": len(chunks),
+                "contextual_chunks": sum(1 for c in chunks if c.context),
+                "total_chars": sum(c.char_count for c in chunks),
+                "total_context_tokens": total_context_tokens,
+                "avg_context_tokens": avg_context_tokens,
+                "indexed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "chunk_ids": [c.chunk_id for c in chunks],
+                "is_summary": True
+            }
         }
         
         # Save store
@@ -306,9 +371,6 @@ class ContextualLegalIndexer:
         
         logger.info(f"Processing {len(all_documents)} documents...")
         
-        batch_chunks = []
-        batch_docs = []
-        
         for i, doc_info in enumerate(all_documents):
             logger.info(f"\n[{i+1}/{len(all_documents)}] Processing: {doc_info['name']}")
             logger.info(f"  Category: {doc_info['category']}")
@@ -321,40 +383,21 @@ class ContextualLegalIndexer:
             if not content:
                 continue
             
-            # Process with contextual chunking
+            # Process with contextual chunking and immediate indexing
             try:
-                chunks = self.process_document(doc_info, content)
+                # Process and index chunks immediately as they're generated
+                chunks = self.process_document(doc_info, content, index_immediately=True)
                 self.stats["chunks_created"] += len(chunks)
-                
-                # Add to batch
-                batch_chunks.extend(chunks)
-                batch_docs.append((doc_info, chunks))
                 
                 # Log contextual stats
                 if self.use_contextual:
                     contextual_count = sum(1 for c in chunks if c.context)
-                    logger.info(f"  ✓ Created {len(chunks)} chunks ({contextual_count} with context)")
+                    logger.info(f"  ✓ Created and indexed {len(chunks)} chunks ({contextual_count} with context)")
                 else:
-                    logger.info(f"  ✓ Created {len(chunks)} chunks (no context)")
+                    logger.info(f"  ✓ Created and indexed {len(chunks)} chunks (no context)")
                 
-                # Index in batches to avoid overwhelming the pipeline
-                if len(batch_chunks) >= batch_size * 10 or i == len(all_documents) - 1:
-                    logger.info(f"  Indexing batch of {len(batch_chunks)} chunks...")
-                    
-                    indexed_count = 0
-                    for chunk in batch_chunks:
-                        if self.index_chunk(chunk):
-                            indexed_count += 1
-                    
-                    logger.info(f"  ✓ Indexed {indexed_count}/{len(batch_chunks)} chunks successfully")
-                    
-                    # Save document info for this batch
-                    for doc, doc_chunks in batch_docs:
-                        self.save_document_info(doc, doc_chunks)
-                    
-                    # Clear batch
-                    batch_chunks = []
-                    batch_docs = []
+                # Save document info immediately after processing
+                self.save_document_info(doc_info, chunks)
                 
                 self.stats["documents_processed"] += 1
                 

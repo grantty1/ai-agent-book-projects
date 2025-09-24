@@ -7,3 +7,4 @@ results/
 output/
 user-memory/data/
 document_store.json
+trajectory.json

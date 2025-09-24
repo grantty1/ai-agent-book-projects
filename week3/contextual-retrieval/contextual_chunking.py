@@ -111,9 +111,10 @@ class ContextualChunker:
         logger.info(f"Using {self.llm_config.provider} ({self.model}) for context generation")
     
     def chunk_document(self, 
-                      text: str, 
-                      doc_id: str,
-                      doc_metadata: Optional[Dict[str, Any]] = None) -> List[ContextualChunk]:
+                     text: str, 
+                     doc_id: str,
+                     doc_metadata: Optional[Dict[str, Any]] = None,
+                     on_chunk_ready: Optional[callable] = None) -> List[ContextualChunk]:
         """
         Chunk a document with optional contextual enhancement.
         
@@ -139,7 +140,7 @@ class ContextualChunker:
         # Step 2: Generate contextual enhancements if enabled
         if self.use_contextual:
             contextual_chunks = self._generate_contextual_chunks(
-                basic_chunks, text, doc_id, doc_metadata
+                basic_chunks, text, doc_id, doc_metadata, on_chunk_ready
             )
         else:
             # Create non-contextual chunks for comparison
@@ -282,7 +283,8 @@ class ContextualChunker:
                                    basic_chunks: List[Dict[str, Any]],
                                    full_document: str,
                                    doc_id: str,
-                                   doc_metadata: Optional[Dict[str, Any]] = None) -> List[ContextualChunk]:
+                                   doc_metadata: Optional[Dict[str, Any]] = None,
+                                   on_chunk_ready: Optional[callable] = None) -> List[ContextualChunk]:
         """
         Generate contextual enhancements for chunks.
         
@@ -342,6 +344,13 @@ class ContextualChunker:
             )
             
             contextual_chunks.append(contextual_chunk)
+            
+            # Call the callback immediately if provided
+            if on_chunk_ready:
+                try:
+                    on_chunk_ready(contextual_chunk)
+                except Exception as e:
+                    logger.error(f"Error in on_chunk_ready callback: {e}")
             
             # Log progress
             if (i + 1) % 10 == 0:

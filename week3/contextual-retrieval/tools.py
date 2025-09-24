@@ -65,6 +65,8 @@ class KnowledgeBaseTools:
             List of matching document chunks with scores
         """
         try:
+            logger.info(f"Knowledge base search initiated - Type: {self.config.type}, Query: '{query}'")
+            
             if self.config.type == KnowledgeBaseType.LOCAL:
                 return self._search_local(query)
             elif self.config.type == KnowledgeBaseType.DIFY:
@@ -74,7 +76,10 @@ class KnowledgeBaseTools:
             elif self.config.type == KnowledgeBaseType.GRAPHRAG:
                 return self._search_graphrag(query)
             else:
+                logger.error(f"Unsupported knowledge base type: {self.config.type}")
                 raise ValueError(f"Unsupported knowledge base type: {self.config.type}")
+        except ValueError:
+            raise  # Re-raise ValueError for unsupported types
         except Exception as e:
             logger.error(f"Error in knowledge base search: {e}")
             return []
@@ -82,6 +87,8 @@ class KnowledgeBaseTools:
     def _search_local(self, query: str) -> List[Dict[str, Any]]:
         """Search using local retrieval pipeline"""
         try:
+            logger.info(f"Searching local knowledge base for: {query}")
+            
             response = requests.post(
                 f"{self.config.local_base_url}/search",
                 json={
@@ -89,12 +96,17 @@ class KnowledgeBaseTools:
                     "mode": "hybrid",
                     "top_k": self.config.local_top_k,
                     "rerank": True
-                }
+                },
+                timeout=30  # Add timeout
             )
             response.raise_for_status()
             
             results = []
             data = response.json()
+            
+            if not data.get("results"):
+                logger.warning(f"Search returned empty results for query: {query}")
+                return []
             
             for item in data.get("results", []):
                 # Extract doc_id and chunk_id from the result
@@ -110,9 +122,16 @@ class KnowledgeBaseTools:
                 )
                 results.append(result.to_dict())
             
-            logger.info(f"Local search returned {len(results)} results")
+            logger.info(f"Local search returned {len(results)} results for query: {query}")
             return results
             
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout connecting to local retrieval pipeline at {self.config.local_base_url}: {e}")
+            return []
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Cannot connect to local retrieval pipeline at {self.config.local_base_url}: {e}")
+            logger.info("Make sure the retrieval pipeline is running: cd ../retrieval-pipeline && python main.py")
+            return []
         except requests.exceptions.RequestException as e:
             logger.error(f"Error connecting to local retrieval pipeline: {e}")
             return []

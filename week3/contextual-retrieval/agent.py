@@ -95,10 +95,14 @@ Remember: Your credibility depends on providing accurate, well-cited information
         try:
             if tool_name == "knowledge_base_search":
                 query = arguments.get("query", "")
+                if self.config.agent.verbose:
+                    logger.info(f"Executing tool: {tool_name} with args: {arguments}")
+                
                 results = self.kb_tools.knowledge_base_search(query)
                 
                 if not results:
-                    return {"status": "no_results", "message": "No relevant documents found"}
+                    logger.info(f"No results found for query: {query}")
+                    return {"status": "no_results", "message": f"No relevant documents found for query: {query}"}
                 
                 # Format results for agent
                 formatted_results = []
@@ -219,13 +223,14 @@ Remember: Your credibility depends on providing accurate, well-cited information
                         try:
                             arguments = json.loads(tool_call.function.arguments)
                         except json.JSONDecodeError:
+                            logger.error(f"Failed to parse tool arguments: {tool_call.function.arguments}")
                             arguments = {}
-                        
-                        if self.config.agent.verbose:
-                            logger.info(f"Executing tool: {tool_name} with args: {arguments}")
                         
                         # Execute tool
                         result = self._execute_tool(tool_name, arguments)
+                        
+                        if self.config.agent.verbose:
+                            logger.info(f"Tool result: {json.dumps(result, ensure_ascii=False)[:200]}...")
                         
                         # Add tool result to messages
                         tool_message = {
@@ -243,11 +248,17 @@ Remember: Your credibility depends on providing accurate, well-cited information
                     self.conversation_history.append({"role": "user", "content": user_query})
                     self.conversation_history.append(assistant_msg)
                     
+                    final_response = message.content or ""
+                    
+                    # Log the final response if verbose
+                    if self.config.agent.verbose:
+                        logger.info(f"Final response generated (length: {len(final_response)} chars)")
+                    
                     # Return response
                     if stream:
-                        return self._stream_response(message.content or "")
+                        return self._stream_response(final_response)
                     else:
-                        return message.content or ""
+                        return final_response
                         
             except Exception as e:
                 logger.error(f"Error in query processing: {e}")
@@ -288,7 +299,13 @@ Remember: Your credibility depends on providing accurate, well-cited information
         
         try:
             # Simple retrieval
+            if self.config.agent.verbose:
+                logger.info(f"Non-agentic mode: searching for '{user_query}'")
+                
             search_results = self.kb_tools.knowledge_base_search(user_query)
+            
+            if self.config.agent.verbose:
+                logger.info(f"Non-agentic mode: found {len(search_results)} results")
             
             # Build context from search results
             context_parts = []
