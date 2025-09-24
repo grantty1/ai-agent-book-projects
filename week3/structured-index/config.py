@@ -46,7 +46,7 @@ class GraphRAGConfig:
 class APIConfig:
     """Configuration for HTTP API service."""
     host: str = "127.0.0.1"
-    port: int = 8080
+    port: int = 4242
     reload: bool = True
     max_results: int = 10
     timeout_seconds: int = 30
@@ -85,7 +85,7 @@ def get_api_config() -> APIConfig:
     """Get API configuration from environment."""
     return APIConfig(
         host=os.getenv("API_HOST", "127.0.0.1"),
-        port=int(os.getenv("API_PORT", "8080")),
+        port=int(os.getenv("API_PORT", "4242")),
         reload=os.getenv("API_RELOAD", "true").lower() == "true",
         max_results=int(os.getenv("API_MAX_RESULTS", "10")),
         timeout_seconds=int(os.getenv("API_TIMEOUT", "30"))

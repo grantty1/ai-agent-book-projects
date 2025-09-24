@@ -47,8 +47,8 @@ DIFY_API_KEY=your_dify_api_key  # if using Dify
 DIFY_DATASET_ID=your_dataset_id  # optional
 
 # Structured Index Configuration (for RAPTOR/GraphRAG)
-RAPTOR_BASE_URL=http://localhost:8080  # RAPTOR API endpoint
-GRAPHRAG_BASE_URL=http://localhost:8080  # GraphRAG API endpoint
+RAPTOR_BASE_URL=http://localhost:4242  # RAPTOR API endpoint
+GRAPHRAG_BASE_URL=http://localhost:4242  # GraphRAG API endpoint
 
 # LLM Configuration
 LLM_PROVIDER=kimi  # default provider
@@ -268,14 +268,14 @@ python main.py
 
 ```bash
 # Check if the API is running
-curl http://localhost:8080/status
+curl http://localhost:4242/status
 
 # Start the API server
 cd ../structured-index
 python main.py serve
 
 # Verify indexes are built
-curl http://localhost:8080/statistics
+curl http://localhost:4242/statistics
 ```
 
 ### API Key Issues

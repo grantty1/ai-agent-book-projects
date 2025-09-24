@@ -205,12 +205,12 @@ results = graphrag.search("instruction relationships", top_k=5)
 
 ```bash
 # Build index
-curl -X POST http://localhost:8080/build \
+curl -X POST http://localhost:4242/build \
   -H "Content-Type: application/json" \
   -d '{"file_path": "intel_manual.pdf", "index_type": "both"}'
 
 # Query
-curl -X POST http://localhost:8080/query \
+curl -X POST http://localhost:4242/query \
   -H "Content-Type: application/json" \
   -d '{"query": "vector instructions", "index_type": "hybrid"}'
 ```

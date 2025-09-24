@@ -100,7 +100,7 @@ python main.py --index-type annoy
 #### With Custom Configuration
 
 ```bash
-python main.py --index-type hnsw --host 0.0.0.0 --port 8080 --debug --show-embeddings
+python main.py --index-type hnsw --host 0.0.0.0 --port 4242 --debug --show-embeddings
 ```
 
 #### Available Options

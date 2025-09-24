@@ -132,12 +132,12 @@ class KnowledgeBaseConfig:
     dify_top_k: int = 10
     
     # RAPTOR tree-based index config
-    raptor_base_url: str = "http://localhost:8080"
+    raptor_base_url: str = "http://localhost:4242"
     raptor_top_k: int = 10
     raptor_search_levels: bool = True  # Search across multiple tree levels
     
     # GraphRAG graph-based index config
-    graphrag_base_url: str = "http://localhost:8080"
+    graphrag_base_url: str = "http://localhost:4242"
     graphrag_top_k: int = 10
     graphrag_search_type: str = "hybrid"  # entity, community, or hybrid
     

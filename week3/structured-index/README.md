@@ -83,18 +83,18 @@ python main.py serve
 1. **Start the server:**
 ```bash
 python main.py serve
-# Server runs on http://localhost:8080
+# Server runs on http://localhost:4242
 ```
 
 2. **Build an index via API:**
 ```bash
 # Upload a file and build index
-curl -X POST "http://localhost:8080/upload" \
+curl -X POST "http://localhost:4242/upload" \
   -F "file=@path/to/intel_manual.pdf" \
   -F "index_type=both"
 
 # Build from text
-curl -X POST "http://localhost:8080/build" \
+curl -X POST "http://localhost:4242/build" \
   -H "Content-Type: application/json" \
   -d '{
     "file_path": "/path/to/document.pdf",
@@ -105,7 +105,7 @@ curl -X POST "http://localhost:8080/build" \
 
 3. **Query the index:**
 ```bash
-curl -X POST "http://localhost:8080/query" \
+curl -X POST "http://localhost:4242/query" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What are vector instructions?",
@@ -116,8 +116,8 @@ curl -X POST "http://localhost:8080/query" \
 
 4. **Check index status:**
 ```bash
-curl http://localhost:8080/status
-curl http://localhost:8080/statistics
+curl http://localhost:4242/status
+curl http://localhost:4242/statistics
 ```
 
 ## API Endpoints

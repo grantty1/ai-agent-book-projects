@@ -20,7 +20,7 @@ def test_raptor_backend():
     # Configure for RAPTOR
     config = Config.from_env()
     config.knowledge_base.type = KnowledgeBaseType.RAPTOR
-    config.knowledge_base.raptor_base_url = "http://localhost:8080"
+    config.knowledge_base.raptor_base_url = "http://localhost:4242"
     config.knowledge_base.raptor_top_k = 5
     config.llm.provider = "kimi"  # Use your preferred provider
     
@@ -57,7 +57,7 @@ def test_graphrag_backend():
     # Configure for GraphRAG
     config = Config.from_env()
     config.knowledge_base.type = KnowledgeBaseType.GRAPHRAG
-    config.knowledge_base.graphrag_base_url = "http://localhost:8080"
+    config.knowledge_base.graphrag_base_url = "http://localhost:4242"
     config.knowledge_base.graphrag_top_k = 5
     config.knowledge_base.graphrag_search_type = "hybrid"
     config.llm.provider = "kimi"  # Use your preferred provider
@@ -95,8 +95,8 @@ def compare_backends():
     query = "Explain the Intel x86 instruction format and its components"
     
     backends = [
-        (KnowledgeBaseType.RAPTOR, "RAPTOR Tree-Based", "http://localhost:8080"),
-        (KnowledgeBaseType.GRAPHRAG, "GraphRAG Knowledge Graph", "http://localhost:8080")
+        (KnowledgeBaseType.RAPTOR, "RAPTOR Tree-Based", "http://localhost:4242"),
+        (KnowledgeBaseType.GRAPHRAG, "GraphRAG Knowledge Graph", "http://localhost:4242")
     ]
     
     results = {}
@@ -154,7 +154,7 @@ def test_non_agentic_mode():
     print("\nRAPTOR (Non-Agentic):")
     config = Config.from_env()
     config.knowledge_base.type = KnowledgeBaseType.RAPTOR
-    config.knowledge_base.raptor_base_url = "http://localhost:8080"
+    config.knowledge_base.raptor_base_url = "http://localhost:4242"
     
     agent = AgenticRAG(config)
     response = agent.query_non_agentic(query, stream=False)
@@ -163,7 +163,7 @@ def test_non_agentic_mode():
     # Test with GraphRAG
     print("\nGraphRAG (Non-Agentic):")
     config.knowledge_base.type = KnowledgeBaseType.GRAPHRAG
-    config.knowledge_base.graphrag_base_url = "http://localhost:8080"
+    config.knowledge_base.graphrag_base_url = "http://localhost:4242"
     
     agent = AgenticRAG(config)
     response = agent.query_non_agentic(query, stream=False)
@@ -175,8 +175,8 @@ def main():
     print("Agentic RAG with Structured Index Backends Test Suite")
     print("=" * 60)
     
-    # Make sure the structured-index API is running on port 8080
-    print("\nNote: Make sure the structured-index API is running on port 8080")
+    # Make sure the structured-index API is running on port 4242
+    print("\nNote: Make sure the structured-index API is running on port 4242")
     print("Run: cd ../structured-index && python main.py serve")
     
     input("\nPress Enter to start tests...")
