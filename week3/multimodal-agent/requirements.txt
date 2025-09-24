@@ -1,5 +1,5 @@
 # Core dependencies
-google-generativeai>=0.8.0
+google-genai>=0.1.0  # New Google AI SDK for Gemini
 openai>=1.50.0
 httpx>=0.27.0
 python-dotenv>=1.0.0

@@ -16,8 +16,8 @@ import mimetypes
 from datetime import datetime
 
 # Google Gemini imports
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google import genai
+from google.genai import types
 
 # OpenAI imports
 from openai import OpenAI, AsyncOpenAI
@@ -170,30 +170,111 @@ class MultimodalTools:
         return response.choices[0].message.content
         
     async def _analyze_with_gemini_audio(self, content: MultimodalContent, query: str) -> str:
-        """Use Gemini for audio analysis"""
-        genai.configure(api_key=self.agent.config.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        """Use Gemini for audio analysis with thinking mode"""
+        client = genai.Client(api_key=self.agent.config.gemini_api_key)
         
         audio_data = content.get_bytes()
-        response = model.generate_content([
-            query,
-            {"mime_type": content.mime_type, "data": audio_data}
-        ])
         
-        return response.text
+        # Always enable thinking mode
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=True
+            )
+        )
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=[
+                query,
+                types.Part.from_bytes(
+                    data=audio_data,
+                    mime_type=content.mime_type
+                )
+            ],
+            config=config
+        )
+        
+        # Extract and print thinking content, return only the answer
+        result = ""
+        first_thinking = True
+        first_response = True
+        
+        if hasattr(response, 'candidates') and response.candidates:
+            for part in response.candidates[0].content.parts:
+                if not part.text:
+                    continue
+                if part.thought:
+                    if first_thinking:
+                        print("\n[Gemini Thinking] ", end="", flush=True)
+                        first_thinking = False
+                    print(part.text, end="", flush=True)
+                else:
+                    if first_response:
+                        if not first_thinking:  # We had thinking output
+                            print()  # End the thinking line
+                        print("[Gemini Response]", flush=True)
+                        first_response = False
+                    # Don't print response text, just collect it
+                    result += part.text
+        else:
+            result = response.text
+        
+        print("\n", flush=True)  # End the output line
+        return result
         
     async def _analyze_with_gemini_pdf(self, content: MultimodalContent, query: str) -> str:
-        """Use Gemini for PDF analysis"""
-        genai.configure(api_key=self.agent.config.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        """Use Gemini for PDF analysis with thinking mode"""
+        client = genai.Client(api_key=self.agent.config.gemini_api_key)
         
+        # Get PDF bytes directly - no base64 encoding needed with new SDK
         pdf_data = content.get_bytes()
-        response = model.generate_content([
-            {"mime_type": "application/pdf", "data": pdf_data},
-            query
-        ])
         
-        return response.text
+        # Always enable thinking mode
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=True
+            )
+        )
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=[
+                types.Part.from_bytes(
+                    data=pdf_data,
+                    mime_type='application/pdf'
+                ),
+                query
+            ],
+            config=config
+        )
+        
+        # Extract and print thinking content, return only the answer
+        result = ""
+        first_thinking = True
+        first_response = True
+        
+        if hasattr(response, 'candidates') and response.candidates:
+            for part in response.candidates[0].content.parts:
+                if not part.text:
+                    continue
+                if part.thought:
+                    if first_thinking:
+                        print("\n[Gemini Thinking] ", end="", flush=True)
+                        first_thinking = False
+                    print(part.text, end="", flush=True)
+                else:
+                    if first_response:
+                        if not first_thinking:  # We had thinking output
+                            print()  # End the thinking line
+                        print("[Gemini Response]", flush=True)
+                        first_response = False
+                    # Don't print response text, just collect it
+                    result += part.text
+        else:
+            result = response.text
+        
+        print("\n", flush=True)  # End the output line
+        return result
 
 
 class MultimodalAgent:
@@ -320,30 +401,60 @@ class MultimodalAgent:
             raise ValueError(f"Unknown provider: {model_config.provider}")
             
     async def _process_native_gemini(self, content: MultimodalContent, query: Optional[str]) -> str:
-        """Process using Gemini's native multimodal API"""
-        genai.configure(api_key=self.config.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        """Process using Gemini's native multimodal API with thinking mode"""
+        client = genai.Client(api_key=self.config.gemini_api_key)
         
-        # Build prompt parts
-        parts = []
+        # Build content parts
+        contents = []
         
-        # Add the multimodal content
+        # Add the multimodal content using types.Part.from_bytes
         content_bytes = content.get_bytes()
+        
         if content.type == "pdf":
-            parts.append({"mime_type": "application/pdf", "data": content_bytes})
+            mime_type = "application/pdf"
         elif content.type == "image":
-            parts.append({"mime_type": content.mime_type or "image/jpeg", "data": content_bytes})
+            mime_type = content.mime_type or "image/jpeg"
         elif content.type == "audio":
-            parts.append({"mime_type": content.mime_type or "audio/mpeg", "data": content_bytes})
+            mime_type = content.mime_type or "audio/mpeg"
+        else:
+            mime_type = content.mime_type
             
+        contents.append(types.Part.from_bytes(
+            data=content_bytes,
+            mime_type=mime_type
+        ))
+        
         # Add the query
         if query:
-            parts.append(query)
+            contents.append(query)
         else:
-            parts.append(f"Please analyze this {content.type} content.")
+            contents.append(f"Please analyze this {content.type} content.")
+        
+        # Always enable thinking mode
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=True
+            )
+        )
             
-        response = model.generate_content(parts)
-        return response.text
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=contents,
+            config=config
+        )
+        
+        # Extract and print thinking content, return only the answer
+        result = ""
+        if hasattr(response, 'candidates') and response.candidates:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'thought') and part.thought and part.text:
+                    print(f"\n💭 [Gemini Thinking]: {part.text}\n", flush=True)
+                elif part.text:
+                    result += part.text
+        else:
+            result = response.text
+            
+        return result
         
     async def _process_native_openai(self, content: MultimodalContent, query: Optional[str]) -> str:
         """Process using OpenAI's native multimodal API"""
@@ -437,18 +548,58 @@ class MultimodalAgent:
             raise ValueError(f"Unknown content type: {content.type}")
             
     async def _extract_pdf_to_text(self, content: MultimodalContent) -> str:
-        """Extract PDF to text using OCR"""
-        # Option 1: Use Gemini for PDF extraction
-        genai.configure(api_key=self.config.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        """Extract PDF to text using OCR with thinking mode"""
+        # Use Gemini for PDF extraction with new SDK
+        client = genai.Client(api_key=self.config.gemini_api_key)
         
         pdf_data = content.get_bytes()
-        response = model.generate_content([
-            {"mime_type": "application/pdf", "data": pdf_data},
-            "Extract all text content from this PDF document, preserving structure and formatting."
-        ])
         
-        return response.text
+        # Always enable thinking mode
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=True
+            )
+        )
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=[
+                types.Part.from_bytes(
+                    data=pdf_data,
+                    mime_type='application/pdf'
+                ),
+                "Extract all text content from this PDF document, preserving structure and formatting."
+            ],
+            config=config
+        )
+        
+        # Extract and print thinking content, return only the answer
+        result = ""
+        first_thinking = True
+        first_response = True
+        
+        if hasattr(response, 'candidates') and response.candidates:
+            for part in response.candidates[0].content.parts:
+                if not part.text:
+                    continue
+                if part.thought:
+                    if first_thinking:
+                        print("\n[Gemini Thinking] ", end="", flush=True)
+                        first_thinking = False
+                    print(part.text, end="", flush=True)
+                elif part.text:
+                    if first_response:
+                        if not first_thinking:  # We had thinking output
+                            print()  # End the thinking line
+                        print("[Gemini Response] ", end="", flush=True)
+                        first_response = False
+                    print(part.text, end="", flush=True)
+                    result += part.text
+        else:
+            result = response.text
+        
+        print("\n", flush=True)  # End the output line
+        return result
         
     async def _extract_image_to_text(self, content: MultimodalContent) -> str:
         """Extract image to text description"""
@@ -510,16 +661,41 @@ class MultimodalAgent:
                 os.unlink(tmp_path)
         else:
             # Option 2: Use Gemini for audio understanding
-            genai.configure(api_key=self.config.gemini_api_key)
-            model = genai.GenerativeModel('gemini-2.5-pro')
+            client = genai.Client(api_key=self.config.gemini_api_key)
             
             audio_data = content.get_bytes()
-            response = model.generate_content([
-                "Transcribe this audio content completely and accurately.",
-                {"mime_type": content.mime_type or "audio/mpeg", "data": audio_data}
-            ])
             
-            return response.text
+            # Always enable thinking mode
+            config = types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(
+                    include_thoughts=True
+                )
+            )
+            
+            response = client.models.generate_content(
+                model='gemini-2.5-pro',
+                contents=[
+                    "Transcribe this audio content completely and accurately.",
+                    types.Part.from_bytes(
+                        data=audio_data,
+                        mime_type=content.mime_type or "audio/mpeg"
+                    )
+                ],
+                config=config
+            )
+            
+            # Extract and print thinking content, return only the answer
+            result = ""
+            if hasattr(response, 'candidates') and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'thought') and part.thought and part.text:
+                        print(f"\n💭 [Gemini Thinking]: {part.text}\n", flush=True)
+                    elif part.text:
+                        result += part.text
+            else:
+                result = response.text
+            
+            return result
             
     async def _answer_with_context(self, context: str, query: str) -> str:
         """Answer a query given extracted text context"""
@@ -528,10 +704,33 @@ class MultimodalAgent:
         prompt = f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
         
         if model_config.provider == Provider.GEMINI:
-            genai.configure(api_key=self.config.gemini_api_key)
-            model = genai.GenerativeModel(model_config.model_name)
-            response = model.generate_content(prompt)
-            return response.text
+            client = genai.Client(api_key=self.config.gemini_api_key)
+            
+            # Always enable thinking mode
+            config = types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(
+                    include_thoughts=True
+                )
+            )
+            
+            response = client.models.generate_content(
+                model=model_config.model_name,
+                contents=[prompt],
+                config=config
+            )
+            
+            # Extract and print thinking content, return only the answer
+            result = ""
+            if hasattr(response, 'candidates') and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'thought') and part.thought and part.text:
+                        print(f"\n💭 [Gemini Thinking]: {part.text}\n", flush=True)
+                    elif part.text:
+                        result += part.text
+            else:
+                result = response.text
+                
+            return result
         else:
             # Use OpenAI-compatible API
             if model_config.provider == Provider.OPENAI:
@@ -576,46 +775,116 @@ class MultimodalAgent:
         model_config = self.config.get_model_config(self.current_model)
         
         if stream:
-            async for chunk in self._stream_response(model_config):
+            async for chunk in self._stream_response(model_config, multimodal_content):
                 yield chunk
         else:
             response = await self._get_response(model_config)
             yield response
             
-    async def _stream_response(self, model_config: ModelConfig) -> AsyncGenerator[str, None]:
+    async def _stream_response(self, model_config: ModelConfig, multimodal_content: Optional[MultimodalContent] = None) -> AsyncGenerator[str, None]:
         """Stream response from the model"""
         if model_config.provider == Provider.GEMINI:
-            async for chunk in self._stream_gemini_response():
+            async for chunk in self._stream_gemini_response(multimodal_content):
                 yield chunk
         else:
             async for chunk in self._stream_openai_response(model_config):
                 yield chunk
                 
-    async def _stream_gemini_response(self) -> AsyncGenerator[str, None]:
-        """Stream response from Gemini"""
-        genai.configure(api_key=self.config.gemini_api_key)
-        model = genai.GenerativeModel(self.config.get_model_config(self.current_model).model_name)
+    async def _stream_gemini_response(self, multimodal_content: Optional[MultimodalContent] = None) -> AsyncGenerator[str, None]:
+        """Stream response from Gemini with thinking mode for debugging"""
+        client = genai.Client(api_key=self.config.gemini_api_key)
         
-        # Convert conversation history to Gemini format
-        messages = []
-        for msg in self.conversation_history:
+        # Get the last user message for streaming
+        last_user_message = None
+        for msg in reversed(self.conversation_history):
             if msg.role == "user":
-                messages.append({"role": "user", "parts": [msg.content]})
-            elif msg.role == "assistant":
-                messages.append({"role": "model", "parts": [msg.content]})
+                last_user_message = msg.content
+                break
                 
-        response = model.generate_content(
-            messages[-1]["parts"][0],
-            stream=True
+        if not last_user_message:
+            return
+            
+        # Build content list
+        contents = []
+        
+        # Add multimodal content if present and in native mode
+        if multimodal_content and self.extraction_mode == ExtractionMode.NATIVE:
+            # Add the multimodal data first
+            content_bytes = multimodal_content.get_bytes()
+            
+            if multimodal_content.type == "pdf":
+                mime_type = "application/pdf"
+            elif multimodal_content.type == "image":
+                mime_type = multimodal_content.mime_type or "image/jpeg"
+            elif multimodal_content.type == "audio":
+                mime_type = multimodal_content.mime_type or "audio/mpeg"
+            else:
+                mime_type = multimodal_content.mime_type
+                
+            contents.append(types.Part.from_bytes(
+                data=content_bytes,
+                mime_type=mime_type
+            ))
+            
+        # Add the text message
+        contents.append(last_user_message)
+        
+        # Always enable thinking mode for transparency and debugging
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=True
+            )
+        )
+        
+        # Stream the response - note: generate_content_stream returns a regular generator
+        response = client.models.generate_content_stream(
+            model=self.config.get_model_config(self.current_model).model_name,
+            contents=contents,
+            config=config
         )
         
         full_response = ""
+        first_thinking = True
+        first_response = True
+        
+        # Use regular for loop since the SDK returns a regular generator
         for chunk in response:
-            if chunk.text:
+            # Handle thinking mode output
+            if hasattr(chunk, 'candidates') and chunk.candidates:
+                for part in chunk.candidates[0].content.parts:
+                    if not part.text:
+                        continue
+                    if part.thought:
+                        # Print thinking header once, then content without newlines
+                        if first_thinking:
+                            print("\n[Gemini Thinking] ", end="", flush=True)
+                            first_thinking = False
+                        print(part.text, end="", flush=True)
+                    else:
+                        # Print response header once for debugging
+                        if first_response:
+                            if not first_thinking:  # We had thinking output
+                                print()  # End the thinking line
+                            print("[Gemini Response]", flush=True)
+                            first_response = False
+                        # Yield regular response text to the user (don't print, it will be printed in main.py)
+                        yield part.text
+                        full_response += part.text
+            elif chunk.text:
+                # Fallback for standard streaming
+                if first_response:
+                    if not first_thinking:  # We had thinking output
+                        print()  # End the thinking line
+                    print("[Gemini Response]", flush=True)
+                    first_response = False
+                # Yield text without printing (will be printed in main.py)
                 yield chunk.text
                 full_response += chunk.text
+        
+        # End the console output line
+        print("\n", flush=True)
                 
-        # Add assistant response to history
+        # Add assistant response to history (excluding thinking parts)
         self.add_message(Message(role="assistant", content=full_response))
         
     async def _stream_openai_response(self, model_config: ModelConfig) -> AsyncGenerator[str, None]:
