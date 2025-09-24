@@ -6,3 +6,4 @@ results/
 *.log
 output/
 user-memory/data/
+document_store.json

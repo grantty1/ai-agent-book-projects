@@ -20,7 +20,7 @@ class ServiceConfig:
     # Model settings
     model_name: str = "BAAI/bge-m3"
     use_fp16: bool = True
-    max_seq_length: int = 512
+    max_seq_length: int = 8192  # Increased to match HARD_LIMIT in chunking
     
     # Index settings
     index_type: IndexType = IndexType.HNSW

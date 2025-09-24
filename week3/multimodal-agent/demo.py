@@ -68,9 +68,8 @@ async def compare_extraction_modes(file_path: str, query: str):
         # First extract the content
         print("Extracting content to text...")
         extracted = await agent_extract._extract_single_content(content)
-        print(f"Extracted {len(extracted)} characters")
-        print("\nExtracted text preview:")
-        print(extracted[:500] + "..." if len(extracted) > 500 else extracted)
+        print("\nExtracted text:")
+        print(extracted)
         
         # Then answer the query
         print(f"\nAnswering query with extracted text...")
@@ -174,7 +173,7 @@ async def compare_models(file_path: str, query: str):
             )
             
             result = await agent.process_multimodal_content(content, query)
-            print(result[:500] + "..." if len(result) > 500 else result)
+            print(result)
             
         except Exception as e:
             print(f"Error: {e}")

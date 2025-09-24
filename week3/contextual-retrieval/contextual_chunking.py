@@ -287,14 +287,15 @@ class ContextualChunker:
         Generate contextual enhancements for chunks.
         
         Educational Note:
-        This is where the magic happens. We use an LLM to understand
-        each chunk in the context of the full document and generate
-        a concise contextual description.
+        Following Anthropic's Contextual Retrieval approach:
+        - Each chunk gets a concise context explaining its position in the document
+        - Context is prepended to the chunk before embedding
+        - This dramatically improves retrieval accuracy
         """
         contextual_chunks = []
         
-        # Get document summary for better context generation
-        doc_summary = self._generate_document_summary(full_document, doc_id)
+        # No document summary needed - Anthropic's approach doesn't use it
+        doc_summary = None
         
         for i, chunk in enumerate(basic_chunks):
             logger.info(f"Generating context for chunk {i+1}/{len(basic_chunks)}")
@@ -308,14 +309,10 @@ class ContextualChunker:
                 self.stats["cache_hits"] += 1
                 logger.debug(f"Cache hit for chunk {chunk['chunk_id']}")
             else:
-                # Generate new context
+                # Generate new context using Anthropic's approach
                 context, context_tokens, generation_time = self._generate_chunk_context(
                     chunk["text"],
-                    full_document,
-                    chunk["chunk_index"],
-                    len(basic_chunks),
-                    doc_summary,
-                    doc_metadata
+                    full_document
                 )
                 
                 # Cache the context
@@ -340,8 +337,7 @@ class ContextualChunker:
                 metadata={
                     "contextual": True,
                     "original_char_count": chunk["char_count"],
-                    "context_char_count": len(context),
-                    "doc_summary": doc_summary[:200] if doc_summary else None
+                    "context_char_count": len(context)
                 }
             )
             
@@ -356,69 +352,25 @@ class ContextualChunker:
     
     def _generate_document_summary(self, document: str, doc_id: str) -> str:
         """
-        Generate a brief summary of the document for context.
+        DEPRECATED: Not used in Anthropic's Contextual Retrieval approach.
         
         Educational Note:
-        A document summary helps provide high-level context
-        that can make chunk-specific context more meaningful.
+        Anthropic's research shows that document summaries don't significantly
+        improve retrieval. Instead, they provide the full document directly
+        when generating chunk-specific context. This allows the LLM to understand
+        the exact context needed for each specific chunk.
         """
-        if not self.use_contextual:
-            return ""
-        
-        try:
-            # Truncate document if too long
-            max_doc_chars = 8000  # Roughly 2000 tokens
-            if len(document) > max_doc_chars:
-                # Take beginning, middle, and end
-                third = max_doc_chars // 3
-                truncated = (
-                    document[:third] +
-                    "\n\n[... middle portion omitted ...]\n\n" +
-                    document[len(document)//2 - third//2:len(document)//2 + third//2] +
-                    "\n\n[... portion omitted ...]\n\n" +
-                    document[-third:]
-                )
-            else:
-                truncated = document
-            
-            prompt = f"""Please provide a brief 2-3 sentence summary of this document that captures its main topic and purpose:
-
-<document>
-{truncated}
-</document>
-
-Summary:"""
-            
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant that creates concise document summaries."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=150
-            )
-            
-            summary = response.choices[0].message.content.strip()
-            logger.info(f"Generated document summary for {doc_id}: {summary[:100]}...")
-            return summary
-            
-        except Exception as e:
-            logger.error(f"Error generating document summary: {e}")
-            return ""
+        # This method is kept for backward compatibility but returns empty string
+        return ""
     
     def _generate_chunk_context(self,
                                chunk_text: str,
-                               full_document: str,
-                               chunk_index: int,
-                               total_chunks: int,
-                               doc_summary: str,
-                               doc_metadata: Optional[Dict[str, Any]] = None) -> Tuple[str, int, float]:
+                               full_document: str) -> Tuple[str, int, float]:
         """
-        Generate contextual description for a chunk.
+        Generate contextual description for a chunk using Anthropic's exact approach.
         
-        This follows Anthropic's approach:
-        1. Provide the full document (or representative sample)
+        This follows Anthropic's Contextual Retrieval template exactly:
+        1. Provide the full document
         2. Show the specific chunk
         3. Ask for concise context to situate the chunk
         
@@ -428,59 +380,28 @@ Summary:"""
         start_time = time.time()
         
         try:
-            # Prepare document context (truncate if needed)
-            max_context_chars = 6000  # Leave room for chunk and prompt
-            if len(full_document) > max_context_chars:
-                # Include surrounding context for the chunk
-                chunk_position = full_document.find(chunk_text[:100])  # Find chunk in document
-                if chunk_position > 0:
-                    # Get context around the chunk
-                    context_start = max(0, chunk_position - max_context_chars // 2)
-                    context_end = min(len(full_document), chunk_position + len(chunk_text) + max_context_chars // 2)
-                    document_context = full_document[context_start:context_end]
-                    
-                    if context_start > 0:
-                        document_context = "[... previous content ...]\n\n" + document_context
-                    if context_end < len(full_document):
-                        document_context = document_context + "\n\n[... following content ...]"
-                else:
-                    # Fallback to document sample
-                    document_context = full_document[:max_context_chars] + "\n\n[... remainder of document ...]"
-            else:
-                document_context = full_document
-            
-            # Build the prompt (following Anthropic's template)
+            # Use the exact prompt from Anthropic's blog post
+            # with added instruction to use the same language as the document
             prompt = f"""<document>
-{document_context}
+{full_document}
 </document>
 
-Here is the chunk we want to situate within the whole document:
+Here is the chunk we want to situate within the whole document
+
 <chunk>
 {chunk_text}
 </chunk>
 
-{f"The document is about: {doc_summary}" if doc_summary else ""}
+Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else. You MUST use the same language as the document."""
 
-Chunk position: {chunk_index + 1} of {total_chunks} total chunks.
-
-Please give a short, succinct context (2-3 sentences max) to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Focus on:
-1. What section/topic of the document this chunk belongs to
-2. Any important entities, concepts, or relationships mentioned
-3. How this chunk relates to the document's main topic
-
-Answer only with the succinct context and nothing else. Do not repeat information already clear from the chunk itself."""
-
+            # Use the exact approach from Anthropic - no system message needed
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are a helpful assistant that generates concise contextual descriptions for document chunks to improve search retrieval."
-                    },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,  # Low temperature for consistency
-                max_tokens=150
+                max_tokens=100  # Anthropic mentions 50-100 tokens typically
             )
             
             context = response.choices[0].message.content.strip()
@@ -489,7 +410,7 @@ Answer only with the succinct context and nothing else. Do not repeat informatio
             token_count = len(prompt.split()) + len(context.split())
             generation_time = time.time() - start_time
             
-            logger.debug(f"Generated context in {generation_time:.2f}s: {context[:100]}...")
+            logger.info(f"Generated context in {generation_time:.2f}s: {context}")
             
             return context, token_count, generation_time
             

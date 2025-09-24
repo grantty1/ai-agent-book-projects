@@ -34,7 +34,7 @@ class LLMConfig:
     model: Optional[str] = None  # Will use provider defaults if not specified
     api_key: Optional[str] = None  # Will read from env if not provided
     temperature: float = 0.7
-    max_tokens: int = 4096
+    max_tokens: int = 1024
     stream: bool = True
     
     # Provider-specific defaults
@@ -149,7 +149,7 @@ class KnowledgeBaseConfig:
 class ChunkingConfig:
     """Document chunking configuration"""
     chunk_size: int = 2048  # Characters per chunk
-    max_chunk_size: int = 4096  # Max size when respecting paragraph boundaries
+    max_chunk_size: int = 1024  # Max size when respecting paragraph boundaries
     chunk_overlap: int = 200  # Overlap between chunks
     respect_paragraph_boundary: bool = True
     min_chunk_size: int = 100  # Minimum chunk size

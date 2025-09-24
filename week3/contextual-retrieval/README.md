@@ -238,7 +238,7 @@ IMPROVEMENT: 60.8%
 ### Chunking Parameters
 ```python
 config.chunking.chunk_size = 2048  # Characters per chunk
-config.chunking.max_chunk_size = 4096  # Maximum chunk size
+config.chunking.max_chunk_size = 1024  # Maximum chunk size
 config.chunking.chunk_overlap = 200  # Overlap between chunks
 config.chunking.respect_paragraph_boundary = True  # Preserve paragraphs
 ```
