@@ -1,0 +1,10 @@
+mcp>=0.9.0
+openai>=1.0.0
+httpx>=0.24.0
+python-dotenv>=1.0.0
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.0.0
+PyGithub>=2.0.0
+subprocess-tee>=0.4.0
