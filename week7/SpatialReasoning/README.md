@@ -33,10 +33,8 @@ VIRL-VL 是基于真实世界 Google Street View 数据的视觉-语言导航任
 
 **论文出处**：[SFT Memorizes, RL Generalizes](https://arxiv.org/pdf/2501.17161)  
 **代码仓库**：
-- **推荐使用（已修复）**：[bojieli/SFTvsRL](https://github.com/bojieli/SFTvsRL/) ⭐
-- 官方版本（有 bug）：[LeslieTrue/SFTvsRL](https://github.com/LeslieTrue/SFTvsRL)
-
-**⚠️ 重要提示**：本文档基于 [bojieli/SFTvsRL](https://github.com/bojieli/SFTvsRL/) fork 版本。该版本修复了官方仓库中的关键 bug，使得训练后能够正确保存 checkpoint。
+- **推荐使用（我的 fork 版本）**：[bojieli/SFTvsRL](https://github.com/bojieli/SFTvsRL/) ⭐
+- 官方版本：[LeslieTrue/SFTvsRL](https://github.com/LeslieTrue/SFTvsRL)
 
 ---
 
