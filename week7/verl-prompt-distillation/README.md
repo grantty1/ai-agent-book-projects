@@ -97,7 +97,7 @@ python create_data.py \
     --tensor_parallel_size 4
 
 # Option 2: Parallel instances (uses ALL 8 GPUs - RECOMMENDED for H100x8)
-bash create_data_h100x8_parallel.sh
+bash create_data_h100x8.sh
 ```
 
 **Options:**
@@ -108,24 +108,49 @@ bash create_data_h100x8_parallel.sh
 - `--tensor_parallel_size`: Number of GPUs for inference (4 recommended)
 - `--max_retries`: Number of retry attempts for failed samples (default: 3)
 
-**For H100x8 users**: Use `create_data_h100x8_parallel.sh` to utilize all 8 GPUs (runs 2 instances in parallel, each with TP=4)
+**For H100x8 users**: Use `bash create_data_h100x8.sh` to utilize all 8 GPUs (runs 2 instances in parallel, each with TP=4)
+
+**H100x8 Training**: For training on H100x8 systems, use:
+```bash
+# With defaults (saves to ./models/prompt_distillation)
+bash train_sft_h100x8.sh
+
+# Or specify custom save path
+bash train_sft_h100x8.sh ./models/my_custom_path
+```
 
 This will:
 - Load sentences from the multilingual dataset
 - Use the teacher model to generate language labels with the full prompt
-- Save training data in JSONL format for verl
+- Save training data in JSONL format
+
+### Step 1.5: Convert to Parquet Format
+
+Verl requires Parquet format for training. Convert the JSONL data:
+
+```bash
+python convert_jsonl_to_parquet.py \
+    --input_file ./data/prompt_distillation_lang.jsonl \
+    --output_file ./data/prompt_distillation_lang.parquet
+```
+
+This converts the JSONL file to Parquet format that verl can read.
 
 ### Step 2: Train the Student Model
 
 Fine-tune the student model on the distilled data:
 
 ```bash
-bash train_sft.sh 2 ./models/prompt_distillation
+# With defaults (2 GPUs, saves to ./models/prompt_distillation)
+bash train_sft.sh
+
+# Or specify custom parameters
+bash train_sft.sh 4 ./models/my_custom_path
 ```
 
-**Arguments:**
-- First arg: Number of GPUs to use (e.g., 2)
-- Second arg: Where to save model checkpoints
+**Arguments (all optional):**
+- First arg: Number of GPUs to use (default: 2)
+- Second arg: Where to save model checkpoints (default: ./models/prompt_distillation)
 
 The training script will:
 - Load the generated distillation dataset (from 30B teacher)
@@ -152,9 +177,11 @@ verl-prompt-distillation/
 ├── README.md                          # This file
 ├── requirements.txt                   # Python dependencies
 ├── create_data.py                     # Data generation script (Step 1)
+├── convert_jsonl_to_parquet.py        # Format conversion (Step 1.5)
 ├── train_sft.sh                       # Training script (Step 2)
 ├── data/                              # Generated training data
-│   └── prompt_distillation_lang.jsonl
+│   ├── prompt_distillation_lang.jsonl
+│   └── prompt_distillation_lang.parquet
 └── models/                            # Trained model checkpoints
     └── prompt_distillation/
 ```
@@ -187,6 +214,8 @@ The generated data follows verl's multi-turn format:
   ]
 }
 ```
+
+**Note**: Verl requires Parquet format for training. The data generation script produces JSONL, which must be converted to Parquet using `convert_jsonl_to_parquet.py` before training.
 
 ### Training Configuration
 

@@ -13,17 +13,25 @@
 
 set -x
 
-if [ "$#" -lt 2 ]; then
-    echo "Usage: train_sft.sh <nproc_per_node> <save_path> [other_configs...]"
-    echo "Example: bash train_sft.sh 2 ./models/prompt_distillation"
-    exit 1
-fi
-
-nproc_per_node=$1
-save_path=$2
+# Use defaults if not provided
+nproc_per_node=${1:-2}
+save_path=${2:-"./models/prompt_distillation"}
 
 # Shift the arguments so $@ refers to the rest
-shift 2
+if [ "$#" -ge 2 ]; then
+    shift 2
+elif [ "$#" -ge 1 ]; then
+    shift 1
+fi
+
+echo "============================================"
+echo "Training - Prompt Distillation"
+echo "============================================"
+echo "Save path: $save_path"
+echo "GPUs: $nproc_per_node"
+echo "Batch size: 128"
+echo "============================================"
+echo ""
 
 # Note: Using Qwen3-4B-Instruct-2507 as student (smaller, more efficient)
 # Teacher model (Qwen3-30B-A3B-Instruct-2507) is used for data generation
@@ -31,8 +39,8 @@ shift 2
 
 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      -m verl.trainer.fsdp_sft_trainer \
-    data.train_files=./data/prompt_distillation_lang.jsonl \
-    data.val_files=./data/prompt_distillation_lang.jsonl \
+    data.train_files=./data/prompt_distillation_lang.parquet \
+    data.val_files=./data/prompt_distillation_lang.parquet \
     data.multiturn.enable=true \
     data.multiturn.messages_key=messages \
     data.train_batch_size=128 \

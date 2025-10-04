@@ -4,14 +4,22 @@
 
 set -x
 
-if [ "$#" -lt 1 ]; then
-    echo "Usage: train_sft_h100x8.sh <save_path> [other_configs...]"
-    echo "Example: bash train_sft_h100x8.sh ./models/prompt_distillation"
-    exit 1
+# Use default save path if not provided
+save_path=${1:-"./models/prompt_distillation"}
+
+# Shift only if an argument was provided
+if [ "$#" -ge 1 ]; then
+    shift 1
 fi
 
-save_path=$1
-shift 1
+echo "============================================"
+echo "H100x8 Training - Prompt Distillation"
+echo "============================================"
+echo "Save path: $save_path"
+echo "GPUs: 8 (H100)"
+echo "Batch size: 128 (16 per GPU)"
+echo "============================================"
+echo ""
 
 # H100x8 Optimized Configuration
 # ================================
@@ -28,8 +36,8 @@ nproc_per_node=8  # Use all 8 H100 GPUs
 
 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      -m verl.trainer.fsdp_sft_trainer \
-    data.train_files=./data/prompt_distillation_lang.jsonl \
-    data.val_files=./data/prompt_distillation_lang.jsonl \
+    data.train_files=./data/prompt_distillation_lang.parquet \
+    data.val_files=./data/prompt_distillation_lang.parquet \
     data.multiturn.enable=true \
     data.multiturn.messages_key=messages \
     data.train_batch_size=128 \

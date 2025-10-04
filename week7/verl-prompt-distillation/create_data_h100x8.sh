@@ -56,6 +56,39 @@ echo "  Part 1: $PART1_LINES lines (GPU 0-3)"
 echo "  Part 2: $PART2_LINES lines (GPU 4-7)"
 echo ""
 
+# Setup signal handler to kill both processes on Ctrl+C
+cleanup() {
+    echo ""
+    echo "🛑 Caught interrupt signal (Ctrl+C)"
+    echo "Killing both processes..."
+    if [ ! -z "$PID1" ] && kill -0 $PID1 2>/dev/null; then
+        echo "  Killing Instance 1 (PID $PID1)..."
+        kill -TERM $PID1 2>/dev/null || true
+    fi
+    if [ ! -z "$PID2" ] && kill -0 $PID2 2>/dev/null; then
+        echo "  Killing Instance 2 (PID $PID2)..."
+        kill -TERM $PID2 2>/dev/null || true
+    fi
+    # Wait a moment for graceful shutdown
+    sleep 2
+    # Force kill if still running
+    if [ ! -z "$PID1" ] && kill -0 $PID1 2>/dev/null; then
+        echo "  Force killing Instance 1..."
+        kill -9 $PID1 2>/dev/null || true
+    fi
+    if [ ! -z "$PID2" ] && kill -0 $PID2 2>/dev/null; then
+        echo "  Force killing Instance 2..."
+        kill -9 $PID2 2>/dev/null || true
+    fi
+    # Cleanup temp files
+    echo "  Cleaning up temporary files..."
+    rm -rf "$TEMP_DIR"
+    echo "✅ Cleanup complete"
+    exit 130
+}
+
+trap cleanup SIGINT SIGTERM
+
 # Run both instances in parallel
 echo "Starting parallel data generation..."
 echo ""

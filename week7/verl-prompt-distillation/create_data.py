@@ -146,7 +146,7 @@ async def generate_distillation_data(
     output_file: str,
     model_name: str = "Qwen/Qwen3-30B-A3B-Thinking-2507",
     temperature: float = 0.15,
-    max_tokens: int = 1000,
+    max_tokens: int = 4096,
     tensor_parallel_size: int = 1,
     max_retries: int = 3,
 ):
@@ -219,9 +219,8 @@ async def generate_distillation_data(
         )
         formatted_prompts.append(prompt_text)
     
-    print(f"Sample formatted prompt (first 500 chars):")
-    print(formatted_prompts[0][:500])
-    print("...")
+    print(f"Sample formatted prompt:")
+    print(formatted_prompts[0])
     
     outputs = llm.generate(formatted_prompts, sampling_params)
     
@@ -385,7 +384,7 @@ def main():
     parser.add_argument(
         "--max_tokens",
         type=int,
-        default=1000,
+        default=4096,
         help="Maximum tokens to generate",
     )
     parser.add_argument(
