@@ -154,6 +154,8 @@ def train_model(
     logging_steps: int = 1,
     save_strategy: str = "epoch",
     lr_scheduler_type: str = "cosine_with_min_lr",
+    report_to: str = "wandb",
+    run_name: str = None,
 ):
     """
     Train the model using TRL SFTTrainer.
@@ -175,6 +177,8 @@ def train_model(
         logging_steps: Steps between logging (default: 1, matching OpenAI)
         save_strategy: When to save checkpoints
         lr_scheduler_type: Learning rate scheduler type (default: cosine_with_min_lr, matching OpenAI)
+        report_to: Where to report metrics (default: wandb)
+        run_name: Custom run name for logging (default: auto-generated)
         
     Returns:
         SFTTrainer: The trained trainer object
@@ -235,13 +239,25 @@ def train_model(
         gradient_checkpointing=True,  # Save memory (matching OpenAI)
         bf16=torch.cuda.is_available(),  # Use bfloat16 if available
         logging_first_step=True,
-        report_to="none",  # Disable wandb/tensorboard by default
+        report_to=report_to,  # wandb, tensorboard, or none
+        run_name=run_name or f"prompt-distillation-{num_train_epochs}epoch",
         remove_unused_columns=False,
         dataset_text_field="",  # We'll use formatting function
         dataset_kwargs={
             "skip_prepare_dataset": False,
         },
     )
+    
+    if local_rank == 0:
+        if report_to == "wandb":
+            print(f"\n  📊 Logging to Weights & Biases (wandb)")
+            print(f"     Run name: {run_name or f'prompt-distillation-{num_train_epochs}epoch'}")
+            print(f"     View at: https://wandb.ai")
+        elif report_to == "tensorboard":
+            print(f"\n  📊 Logging to TensorBoard")
+            print(f"     View with: tensorboard --logdir {output_dir}")
+        else:
+            print(f"\n  📊 Logging disabled (report_to=none)")
     
     # Initialize trainer
     if local_rank == 0:
@@ -368,6 +384,21 @@ def main():
         help="Learning rate scheduler type (default: cosine_with_min_lr, matching OpenAI)",
     )
     
+    # Logging arguments
+    parser.add_argument(
+        "--report_to",
+        type=str,
+        default="wandb",
+        choices=["wandb", "tensorboard", "none"],
+        help="Where to report training metrics (default: wandb)",
+    )
+    parser.add_argument(
+        "--run_name",
+        type=str,
+        default=None,
+        help="Custom run name for wandb (auto-generated if not provided)",
+    )
+    
     args = parser.parse_args()
     
     # Print configuration
@@ -422,6 +453,8 @@ def main():
         max_length=args.max_length,
         warmup_ratio=args.warmup_ratio,
         lr_scheduler_type=args.lr_scheduler_type,
+        report_to=args.report_to,
+        run_name=args.run_name,
     )
     
     # Save final model (only main process)

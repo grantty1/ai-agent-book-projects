@@ -89,11 +89,23 @@ The project uses the same multilingual language classification task as tinker:
 
 ### Prerequisites
 
-Install the required dependencies:
+1. Install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
+
+2. Setup Weights & Biases for training monitoring:
+
+```bash
+# Login to wandb (required for training progress tracking)
+wandb login
+
+# Or set your API key as environment variable
+export WANDB_API_KEY=your_api_key_here
+```
+
+You can get your API key from [https://wandb.ai/settings](https://wandb.ai/settings)
 
 ### System Requirements
 
@@ -152,6 +164,17 @@ Fine-tune the student model on the distilled data using TRL:
 ```bash
 # Single GPU training (recommended - simpler and works reliably)
 bash train_trl.sh
+```
+
+**Monitoring Training:**
+- Training progress is logged to **Weights & Biases** (wandb) by default
+- View real-time metrics at: [https://wandb.ai](https://wandb.ai)
+- Tracks: loss, learning rate, throughput, GPU utilization
+- Every step is logged for detailed monitoring
+
+**To disable wandb logging:**
+```bash
+python train_sft_trl.py --report_to none ...other args...
 ```
 
 ### Step 3: Evaluate Your Model
