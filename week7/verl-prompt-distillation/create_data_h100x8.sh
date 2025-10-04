@@ -16,7 +16,7 @@ echo ""
 # - Remaining GPUs: Can be used for higher batch processing
 
 # Configuration
-INPUT_FILE=${1:-"../tinker-cookbook/example-data/multilingual.txt"}
+INPUT_FILE=${1:-"./example-data/multilingual.txt"}
 OUTPUT_FILE=${2:-"./data/prompt_distillation_lang.jsonl"}
 TENSOR_PARALLEL_SIZE=${3:-4}  # Use 4 GPUs for tensor parallelism (recommended for H100)
 
