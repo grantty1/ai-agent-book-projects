@@ -1,0 +1,21 @@
+# Prompt Distillation with verl - Requirements
+# 
+# Core dependencies for reproducing the tinker prompt distillation experiment
+
+# vLLM for efficient inference (data generation)
+vllm>=0.6.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# verl framework (install separately from ../verl)
+# cd ../verl && pip install -e .
+
+# Note: The following are already included in verl's dependencies:
+# - torch>=2.0.0
+# - transformers>=4.36.0
+# - accelerate>=0.24.0
+# - peft>=0.7.0 (for LoRA)
+# - datasets>=2.14.0
+# - wandb (optional, for logging)
+
