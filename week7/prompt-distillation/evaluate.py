@@ -14,8 +14,10 @@ import json
 import re
 from pathlib import Path
 from typing import List, Dict, Optional
+from collections import defaultdict
 
 import torch
+import numpy as np
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 from tqdm import tqdm
@@ -157,8 +159,152 @@ def evaluate_model(
         results["accuracy"] = correct / total if total > 0 else 0.0
         results["correct"] = correct
         results["evaluated"] = total
+        
+        # Build confusion matrix
+        results["confusion_matrix"] = build_confusion_matrix(
+            predictions, ground_truth_labels, test_sentences
+        )
     
     return results
+
+
+def build_confusion_matrix(predictions: List[str], ground_truth: List[str], 
+                           sentences: List[str]) -> Dict:
+    """
+    Build confusion matrix and identify problematic languages.
+    
+    Returns:
+        Dict with confusion matrix, per-language stats, and error examples
+    """
+    # Get all unique labels
+    all_labels = sorted(set(ground_truth) | set(p for p in predictions if p))
+    
+    # Initialize confusion matrix
+    confusion = defaultdict(lambda: defaultdict(int))
+    per_language_stats = defaultdict(lambda: {"correct": 0, "total": 0, "errors": []})
+    
+    # Build matrix
+    for idx, (pred, gt, sentence) in enumerate(zip(predictions, ground_truth, sentences)):
+        if pred is None:
+            pred = "None"
+        
+        confusion[gt][pred] += 1
+        per_language_stats[gt]["total"] += 1
+        
+        if pred == gt:
+            per_language_stats[gt]["correct"] += 1
+        else:
+            # Store error examples
+            if len(per_language_stats[gt]["errors"]) < 5:  # Keep first 5 errors per language
+                per_language_stats[gt]["errors"].append({
+                    "sentence": sentence,
+                    "predicted": pred,
+                    "ground_truth": gt,
+                    "index": idx,
+                })
+    
+    # Calculate per-language accuracy
+    language_accuracy = {}
+    for lang in all_labels:
+        stats = per_language_stats[lang]
+        if stats["total"] > 0:
+            accuracy = stats["correct"] / stats["total"]
+            language_accuracy[lang] = {
+                "accuracy": accuracy,
+                "correct": stats["correct"],
+                "total": stats["total"],
+                "errors": stats["errors"],
+            }
+    
+    # Sort languages by accuracy (worst first)
+    sorted_languages = sorted(
+        language_accuracy.items(),
+        key=lambda x: x[1]["accuracy"]
+    )
+    
+    # Create 2D confusion matrix as a proper array
+    confusion_matrix_2d = []
+    for true_label in all_labels:
+        row = []
+        for pred_label in all_labels:
+            count = confusion.get(true_label, {}).get(pred_label, 0)
+            row.append(count)
+        confusion_matrix_2d.append(row)
+    
+    return {
+        "confusion_matrix": {gt: dict(preds) for gt, preds in confusion.items()},  # Dict format
+        "confusion_matrix_2d": confusion_matrix_2d,  # 2D array format
+        "all_labels": all_labels,
+        "per_language_accuracy": language_accuracy,
+        "worst_performing_languages": sorted_languages[:5],  # Top 5 worst
+        "all_languages_sorted": sorted_languages,  # All languages sorted by accuracy
+    }
+
+
+def print_confusion_matrix(confusion_data: Dict):
+    """Pretty print confusion matrix and analysis."""
+    print("\n" + "="*80)
+    print("CONFUSION MATRIX")
+    print("="*80)
+    
+    # Get labels and matrix
+    labels = confusion_data["all_labels"]
+    confusion = confusion_data["confusion_matrix"]
+    
+    # Print matrix header
+    print("\n     ", end="")
+    for label in labels:
+        print(f"{label:>4s}", end="")
+    print("  | Total")
+    print("  " + "-" * (len(labels) * 4 + 10))
+    
+    # Print matrix rows
+    for true_label in labels:
+        print(f"{true_label:>2s} | ", end="")
+        row_total = sum(confusion.get(true_label, {}).values())
+        
+        for pred_label in labels:
+            count = confusion.get(true_label, {}).get(pred_label, 0)
+            if count > 0:
+                if true_label == pred_label:
+                    print(f"\033[92m{count:4d}\033[0m", end="")  # Green for diagonal
+                else:
+                    print(f"\033[91m{count:4d}\033[0m", end="")  # Red for errors
+            else:
+                print(f"   .", end="")
+        print(f"  | {row_total:4d}")
+    
+    # Print per-language accuracy
+    print(f"\n{'='*80}")
+    print("PER-LANGUAGE ACCURACY")
+    print("="*80)
+    
+    lang_acc = confusion_data["per_language_accuracy"]
+    sorted_langs = sorted(lang_acc.items(), key=lambda x: x[1]["accuracy"])
+    
+    for lang, stats in sorted_langs:
+        acc = stats["accuracy"] * 100
+        symbol = "✓" if acc >= 90 else "⚠️" if acc >= 70 else "✗"
+        print(f"{symbol} {lang:>2s}: {acc:5.1f}% ({stats['correct']:4d}/{stats['total']:4d})")
+    
+    # Identify problematic languages
+    print(f"\n{'='*80}")
+    print("MOST PROBLEMATIC LANGUAGES (Top 5)")
+    print("="*80)
+    
+    worst_languages = confusion_data["worst_performing_languages"]
+    for idx, (lang, stats) in enumerate(worst_languages, 1):
+        acc = stats["accuracy"] * 100
+        print(f"\n{idx}. Language: {lang} - Accuracy: {acc:.1f}% ({stats['correct']}/{stats['total']})")
+        
+        if stats["errors"]:
+            print(f"   Error examples:")
+            for err in stats["errors"][:3]:  # Show first 3 errors
+                pred_lang = err['predicted']
+                sentence_preview = err['sentence'][:50] + "..." if len(err['sentence']) > 50 else err['sentence']
+                print(f"     - Predicted {pred_lang} (should be {lang}): {sentence_preview}")
+    
+    print("\n" + "="*80)
 
 
 def main():
@@ -269,9 +415,13 @@ def main():
         ground_truth_labels=ground_truth,
     )
     
+    # Print confusion matrix analysis
+    if "confusion_matrix" in results:
+        print_confusion_matrix(results["confusion_matrix"])
+    
     # Print summary
     print("\n" + "="*60)
-    print("EVALUATION RESULTS")
+    print("EVALUATION SUMMARY")
     print("="*60)
     print(f"Model: {args.base_model}")
     print(f"Adapter: {args.model_path}")
@@ -282,26 +432,80 @@ def main():
     print(f"  Parse rate: {results['predicted']/results['total']*100:.2f}%")
     
     if "accuracy" in results:
-        print(f"\n  Accuracy: {results['accuracy']*100:.2f}%")
+        print(f"\n  Overall Accuracy: {results['accuracy']*100:.2f}%")
         print(f"  Correct: {results['correct']}/{results['evaluated']}")
         print(f"\n💡 The model responds directly without the 2000+ token prompt!")
     
-    # Save results
+    # Save comprehensive results to JSON
     output = {
         "model_path": args.model_path,
         "base_model": args.base_model,
         "test_file": args.test_file,
-        "metrics": {
-            k: v for k, v in results.items() if k != "predictions"
+        "train_data_file": args.train_data_file,
+        "timestamp": str(Path(args.model_path).stat().st_mtime) if Path(args.model_path).exists() else None,
+        "summary": {
+            "total_samples": results["total"],
+            "predicted": results["predicted"],
+            "unparseable": results["unparseable"],
+            "parse_rate": results["predicted"]/results["total"] if results["total"] > 0 else 0,
         },
+        "predictions": results["predictions"],
     }
     
-    # Optionally include predictions
-    if args.output_file:
-        output["predictions"] = results["predictions"]
-        with open(args.output_file, "w", encoding="utf-8") as f:
-            json.dump(output, f, indent=2, ensure_ascii=False)
-        print(f"\nResults saved to: {args.output_file}")
+    # Add accuracy metrics if available
+    if "accuracy" in results:
+        output["summary"]["accuracy"] = results["accuracy"]
+        output["summary"]["correct"] = results["correct"]
+        output["summary"]["evaluated"] = results["evaluated"]
+    
+    # Add confusion matrix and language analysis
+    if "confusion_matrix" in results:
+        cm_data = results["confusion_matrix"]
+        output["confusion_matrix"] = {
+            "matrix_dict": cm_data["confusion_matrix"],  # Dict format for readability
+            "matrix_2d": cm_data["confusion_matrix_2d"],  # 2D array for analysis
+            "labels": cm_data["all_labels"],  # Label order for the 2D matrix
+        }
+        
+        # Save ALL languages with their full statistics
+        output["all_languages_accuracy"] = {
+            lang: {
+                "accuracy": stats["accuracy"],
+                "correct": stats["correct"],
+                "total": stats["total"],
+                "error_examples": stats["errors"],
+            }
+            for lang, stats in cm_data["all_languages_sorted"]
+        }
+        
+        # Also save per-language accuracy (same data, different format)
+        output["per_language_accuracy"] = {
+            lang: {
+                "accuracy": stats["accuracy"],
+                "correct": stats["correct"],
+                "total": stats["total"],
+                "error_examples": stats["errors"],
+            }
+            for lang, stats in cm_data["per_language_accuracy"].items()
+        }
+        
+        # Save top 5 worst for quick reference
+        output["worst_performing_languages"] = [
+            {
+                "language": lang,
+                "accuracy": stats["accuracy"],
+                "correct": stats["correct"],
+                "total": stats["total"],
+                "error_examples": stats["errors"],
+            }
+            for lang, stats in cm_data["worst_performing_languages"]
+        ]
+    
+    # Save to file
+    with open(args.output_file, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+    print(f"\n📁 Complete results saved to: {args.output_file}")
+    print(f"   Includes: predictions, confusion matrix, per-language stats, error examples")
 
 
 if __name__ == "__main__":

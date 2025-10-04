@@ -211,9 +211,52 @@ Evaluating model...
 ...
 ================================================================================
 Evaluation completed: 2095 samples processed
+
+================================================================================
+CONFUSION MATRIX
+================================================================================
+
+        ar  de  el  en  es  fr  hi  ot  ru  tr  ur  vi  zh | Total
+  --------------------------------------------------------------
+ar |   183   .   .   .   .   .   .   .   .   .  10   .   . |  193
+de |     .  152   .   2   .   .   .   .   .   .   .   .   . |  158
+el |     .   .  145   .   .   .   .   .   .   .   .   .   . |  148
+en |     .   .   .  201   .   .   .   3   .   .   .   .   . |  204
+...
+ur |    16   .   .   .   .   .   .   .   .   .  92   .   . |  108
+
+(Green = correct, Red = errors)
+
+================================================================================
+PER-LANGUAGE ACCURACY
+================================================================================
+✗ ur:  85.2% (  92/ 108)  ← Problematic
+⚠️ ot:  89.5% ( 145/ 162)  ← Needs attention
+✓ ar:  94.8% ( 183/ 193)
+✓ de:  96.2% ( 152/ 158)
+✓ en:  98.5% ( 201/ 204)
+...
+
+================================================================================
+MOST PROBLEMATIC LANGUAGES (Top 5)
+================================================================================
+
+1. Language: ur - Accuracy: 85.2% (92/108)
+   Error examples:
+     - Predicted ar (should be ur): اور اس نے کہا امّی، میں گھر آگیا ہوں۔
+     - Predicted ar (should be ur): حالانکہ میں اس کے بارے میں سوچ بھی نہیں رہا تھا...
+
+2. Language: ot - Accuracy: 89.5% (145/162)
+   Error examples:
+     - Predicted en (should be ot): Mixed language text...
 ```
 
-Each line shows: prediction, ground truth, running accuracy, and the input text.
+**Saved to JSON:**
+The evaluation results are saved with:
+- **Confusion matrix**: Both as dict and 2D array format
+- **All languages**: Complete statistics for every language
+- **Error analysis**: Example errors for each language
+- **Per-language accuracy**: Sorted from worst to best
 
 ## Project Structure
 
