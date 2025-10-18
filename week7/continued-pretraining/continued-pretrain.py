@@ -169,6 +169,14 @@ inputs = tokenizer([test_prompt], return_tensors = "pt").to("cuda")
 _ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 150, use_cache = True)
 print("="*70 + "\n")
 
+# Test 5: Korean Instruction - Seoul (baseline - should be poor)
+print(f"\n{Colors.BOLD}Test 5: Korean Instruction (Korean Geography){Colors.ENDC}")
+print("="*70)
+test_prompt = alpaca_prompt_korean.format("대한민국의 수도인 서울에 대해 간단히 소개해주세요.", "")
+inputs = tokenizer([test_prompt], return_tensors = "pt").to("cuda")
+_ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 150, use_cache = True)
+print("="*70 + "\n")
+
 print(f"{Colors.GREEN}✓ Baseline testing complete. Original model should be good at English but poor at Korean.{Colors.ENDC}\n")
 
 # ============================================================================
@@ -334,6 +342,14 @@ inputs = tokenizer([test_prompt], return_tensors = "pt").to("cuda")
 _ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 150, use_cache = True)
 print("="*70 + "\n")
 
+# Test 5: Korean Instruction - Seoul (should improve but not perfect yet)
+print(f"\n{Colors.BOLD}Test 5: Korean Instruction (Korean Geography){Colors.ENDC}")
+print("="*70)
+test_prompt = alpaca_prompt_korean.format("대한민국의 수도인 서울에 대해 간단히 소개해주세요.", "")
+inputs = tokenizer([test_prompt], return_tensors = "pt").to("cuda")
+_ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 150, use_cache = True)
+print("="*70 + "\n")
+
 print(f"{Colors.GREEN}✓ Pretrained model testing complete.")
 print(f"{Colors.CYAN}💡 Korean should be significantly improved, English should remain strong.")
 print(f"Instruction following may improve but not perfect yet - that's what SFT is for.{Colors.ENDC}\n")
@@ -451,6 +467,14 @@ inputs = tokenizer([test_prompt], return_tensors = "pt").to("cuda")
 _ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 150, use_cache = True)
 print("="*70 + "\n")
 
+# Test 5: Korean Instruction - Seoul (should follow WELL now)
+print(f"\n{Colors.BOLD}Test 5: Korean Instruction (Korean Geography){Colors.ENDC}")
+print("="*70)
+test_prompt = alpaca_prompt_korean.format("대한민국의 수도인 서울에 대해 간단히 소개해주세요.", "")
+inputs = tokenizer([test_prompt], return_tensors = "pt").to("cuda")
+_ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 150, use_cache = True)
+print("="*70 + "\n")
+
 print(f"{Colors.GREEN}✓ Finetuned model testing complete!")
 print(f"{Colors.CYAN}💡 Model should now follow instructions well in both Korean AND English.{Colors.ENDC}\n")
 
@@ -494,8 +518,7 @@ if False:
     ], return_tensors = "pt").to("cuda")
 
     text_streamer = TextStreamer(tokenizer)
-    _ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 256,
-                       repetition_penalty = 0.1)
+    _ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 256)
 """
 
 # ============================================================================
